@@ -134,6 +134,7 @@ if __name__ == '__main__':
     #mxms = makeline(mxms,20,50,50,75)
     pairs = makepairs(mxms)
     print pairs
+    print len(pairs)
     pp.figure()
     pp.imshow(fftlog+mxms*15)
     pp.gray()
