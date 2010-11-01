@@ -40,7 +40,7 @@ class AudioAnalyzer(object):
         self.lens = []
 
     def read_audio(self, (sample, pts, fps)):
-        # interactive_shell(_locals = locals(), _globals=globals())    
+        # interactive_shell(_locals = locals(), _globals=globals())
         # _ = numpy.argmax(abs(fft(sample[:,0])))
         self.lens.append(len(sample))
         self.ffts[pts] = abs(fft(sample[:,0]))
@@ -48,6 +48,59 @@ class AudioAnalyzer(object):
         self.cnt+=1
         if (int(pts) % 5) == 0:
             print `pts` + "\r",
+
+def maximas(ar,threshold):
+    derleft = numpy.diff(ar)
+    derup = numpy.diff(ar,axis=0)
+    derright = numpy.hstack((derleft,numpy.zeros((derleft.shape[0],1))))
+    derleft = numpy.hstack((numpy.zeros((derleft.shape[0],1)),derleft))
+    derdown = numpy.vstack((derup,numpy.zeros((1,derup.shape[1]))))
+    derup = numpy.vstack((numpy.zeros((1,derup.shape[1])),derup))
+    mx = (derleft>=threshold)&(derright<=threshold)&(derup>=threshold)&(derdown<=threshold)
+    return mx
+
+def seperatemaximas(ar,xwidth,ywidth):
+    mx = maximas(ar,0)
+    indices = numpy.indices(ar.shape)[:,mx]
+    mxims = ar[mx].argsort()
+    for maxima in reversed(mxims):
+        i,j = indices[:,maxima]
+        m = ar[i,j]
+        if m>0:
+            ar[max(0,i-ywidth):i+ywidth,max(0,j-xwidth):j+xwidth] = 0
+            ar[i,j] = m
+    ar[mx==False]=0
+    ar[ar>0] = 1
+    return ar
+
+def makepairs(ar):
+    mx = ar==1
+    indices = numpy.indices(ar.shape)[:,mx].transpose()
+    pairs = []
+    for i,j in indices:
+        tmpboard = mx[i+1:i+35,j+1:j+45]
+        print "-"
+        try:
+            tmpindices = numpy.indices(tmpboard.shape)[:,tmpboard].transpose()
+            for ii,jj in tmpindices:
+                pairs.append([j,i,i+ii+1,jj+1])#[time,f1,f2,dt]
+                ar = makeline(ar,i,j,i+ii+1,j+jj+1)
+        except:pass
+    return numpy.array(sorted(pairs,key=lambda x:x[0]))
+
+
+def makeline(ar,x0,y0,x1,y1):
+    dx = x1-x0
+    dy = y1-y0
+    slope = float(dy)/dx
+    if abs(slope)<1:
+        for x in range(dx):
+            ar[x0+x,y0+round(slope*x)] = 0.3
+    else:
+        for y in range(dy):
+            ar[x0+round(y/slope),y0+y] = 0.3
+    return ar
+
 
 if __name__ == '__main__':
     filename = sys.argv[1]
@@ -62,17 +115,28 @@ if __name__ == '__main__':
     for frame in xrange(6*24):
         # video.get_next_frame()
         audio.get_next_frame()
-    
+
     ffts = numpy.array([f[1:-1] for time,f in sorted(analyzer.ffts.iteritems())])
+
+    ffts = ffts[:,400:]
+    print ffts.shape
+    print numpy.amax(ffts)
     # go to log domain (with lower bound = max / 1e6)
-    fftlog = numpy.log(numpy.maximum(ffts, numpy.amax(ffts)/1e6))
+    fftlog = numpy.transpose(numpy.log(numpy.maximum(ffts, numpy.amax(ffts)/1e6)))
 
     # samples = numpy.array([f for time,f in sorted(analyzer.samples.iteritems())])
-    
+
+
+
+    ffts = numpy.transpose(ffts)
+    mxms = seperatemaximas(fftlog.copy(),15,20)
+    #mxms = makeline(mxms,10,10,20,50)
+    #mxms = makeline(mxms,20,50,50,75)
+    pairs = makepairs(mxms)
+    print pairs
     pp.figure()
-    pp.imshow(numpy.transpose(fftlog))
+    pp.imshow(fftlog+mxms*15)
     pp.gray()
     # pp.figure()
     # pp.imshow(samples)
     interactive_shell(locals(), globals())
-
